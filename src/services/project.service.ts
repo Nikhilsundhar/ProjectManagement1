@@ -24,10 +24,17 @@ export async function getProjectById(id: string) {
   return prisma.project.findUnique({
     where: { id },
     include: {
-      owner: true,
-      members: true,
-      tasks: true,
-    },
+  owner: {
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true
+    }
+  },
+  members: true,
+  tasks: true
+},
   });
 }
 

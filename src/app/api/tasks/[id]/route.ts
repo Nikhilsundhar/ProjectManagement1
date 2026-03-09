@@ -2,40 +2,38 @@ import { NextResponse } from "next/server";
 import { verifyToken } from "@/middleware/auth.middleware";
 import { requireRole } from "@/utils/roleGuard";
 import {
-  getProjectById,
-  updateProject,
-  deleteProject,
-} from "@/services/project.service";
+  getTaskById,
+  updateTask,
+  deleteTask,
+} from "@/services/task.service";
 
 export async function GET(
   req: Request,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   verifyToken(req);
 
-  const { id } = await context.params;
+  const { id } = await params;
 
-  const project = await getProjectById(id);
+  const task = await getTaskById(id);
 
-  return NextResponse.json(project);
+  return NextResponse.json(task);
 }
 
 export async function PUT(
   req: Request,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = verifyToken(req);
 
-    requireRole(user.role, ["ADMIN", "TEAM_LEADER"]);
-
-    const { id } = await context.params;
+    const { id } = await params;
 
     const body = await req.json();
 
-    const project = await updateProject(id, body);
+    const task = await updateTask(id, body);
 
-    return NextResponse.json(project);
+    return NextResponse.json(task);
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message },
@@ -46,18 +44,18 @@ export async function PUT(
 
 export async function DELETE(
   req: Request,
-  context: { params: Promise<{ id: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const user = verifyToken(req);
 
-    requireRole(user.role, ["ADMIN"]);
+    requireRole(user.role, ["ADMIN", "TEAM_LEADER"]);
 
-    const { id } = await context.params;
+    const { id } = await params;
 
-    const project = await deleteProject(id);
+    const task = await deleteTask(id);
 
-    return NextResponse.json(project);
+    return NextResponse.json(task);
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message },
