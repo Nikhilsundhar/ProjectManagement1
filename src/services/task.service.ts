@@ -8,9 +8,17 @@ export async function createTask(data: {
   priority?: "LOW" | "MEDIUM" | "HIGH";
   dueDate?: Date;
 }) {
-  return prisma.task.create({
-    data,
-  });
+  if (data.assigneeId) {
+    const project = await prisma.project.findUnique({
+      where: { id: data.projectId },
+      include: { members: { select: { id: true } } },
+    });
+    if (!project) throw new Error("Project not found.");
+    const isMember = project.members.some((m) => m.id === data.assigneeId);
+    if (!isMember) throw new Error("Assignee must be a member of this project.");
+  }
+
+  return prisma.task.create({ data });
 }
 
 export async function getTasksByProject(projectId: string) {

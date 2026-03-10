@@ -15,6 +15,7 @@ export default function Sidebar() {
     { label: "Projects", href: "/dashboard/projects", roles: ["ADMIN", "TEAM_LEADER", "MEMBER"] },
     { label: "My Tasks", href: "/dashboard/tasks", roles: ["MEMBER"] },
     { label: "All Tasks", href: "/dashboard/tasks", roles: ["ADMIN", "TEAM_LEADER"] },
+    { label: "Employees", href: "/dashboard/employees", roles: ["ADMIN"] },
   ];
 
   const filtered = navItems.filter((item) => item.roles.includes(user.role));

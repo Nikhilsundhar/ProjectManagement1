@@ -15,6 +15,13 @@ interface Task {
   assignee?: { id: string; name: string; email: string };
 }
 
+interface Member {
+  id: string;
+  name: string;
+  email: string;
+  role?: string;
+}
+
 interface Project {
   id: string;
   name: string;
@@ -24,8 +31,15 @@ interface Project {
   startDate?: string;
   dueDate?: string;
   owner: { id: string; name: string; email: string; role: string };
-  members: { id: string; name: string; email: string }[];
+  members: Member[];
   tasks: Task[];
+}
+
+interface UserOption {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
 }
 
 export default function ProjectDetailPage() {
@@ -40,12 +54,19 @@ export default function ProjectDetailPage() {
   const [taskForm, setTaskForm] = useState({ title: "", description: "", priority: "MEDIUM", assigneeId: "" });
   const [error, setError] = useState("");
 
+  // Member management
+  const [allUsers, setAllUsers] = useState<UserOption[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [showAddMember, setShowAddMember] = useState(false);
+
   const canEdit = user?.role === "ADMIN" || user?.role === "TEAM_LEADER";
   const canDelete = user?.role === "ADMIN";
   const canCreateTask = user?.role === "ADMIN" || user?.role === "TEAM_LEADER";
+  const canManageMembers = user?.role === "ADMIN" || user?.role === "TEAM_LEADER";
 
   useEffect(() => {
     loadProject();
+    if (canManageMembers) loadAllUsers();
   }, [id]);
 
   async function loadProject() {
@@ -63,6 +84,16 @@ export default function ProjectDetailPage() {
       // handle
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadAllUsers() {
+    try {
+      const res = await apiFetch("/api/users");
+      const data = await res.json();
+      if (Array.isArray(data)) setAllUsers(data);
+    } catch {
+      // handle
     }
   }
 
@@ -90,6 +121,38 @@ export default function ProjectDetailPage() {
     try {
       await apiFetch(`/api/projects/${id}`, { method: "DELETE" });
       router.push("/dashboard/projects");
+    } catch {
+      // handle
+    }
+  }
+
+  async function handleAddMember() {
+    if (!selectedUserId) return;
+    setError("");
+    try {
+      const res = await apiFetch(`/api/projects/${id}/members`, {
+        method: "POST",
+        body: JSON.stringify({ userId: selectedUserId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error);
+      }
+      setSelectedUserId("");
+      loadProject();
+    } catch (err: any) {
+      setError(err.message);
+    }
+  }
+
+  async function handleRemoveMember(userId: string) {
+    if (!confirm("Remove this member from the project?")) return;
+    try {
+      await apiFetch(`/api/projects/${id}/members`, {
+        method: "DELETE",
+        body: JSON.stringify({ userId }),
+      });
+      loadProject();
     } catch {
       // handle
     }
@@ -147,6 +210,11 @@ export default function ProjectDetailPage() {
 
   if (loading) return <p className="text-gray-500">Loading project...</p>;
   if (!project) return <p className="text-gray-500">Project not found</p>;
+
+  const memberIds = new Set(project.members.map((m) => m.id));
+  const availableUsers = allUsers.filter(
+    (u) => !memberIds.has(u.id) && u.id !== project.owner.id
+  );
 
   return (
     <div>
@@ -254,19 +322,69 @@ export default function ProjectDetailPage() {
         )}
       </div>
 
-      {/* Members */}
-      {project.members && project.members.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-3">Members</h2>
-          <div className="flex flex-wrap gap-2">
-            {project.members.map((m) => (
-              <span key={m.id} className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">
-                {m.name || m.email}
-              </span>
-            ))}
-          </div>
+      {/* Members Section */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Members ({project.members?.length || 0})
+          </h2>
+          {canManageMembers && (
+            <button
+              onClick={() => setShowAddMember(!showAddMember)}
+              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            >
+              {showAddMember ? "Cancel" : "+ Add Member"}
+            </button>
+          )}
         </div>
-      )}
+
+        {showAddMember && (
+          <div className="flex gap-2 mb-4 p-3 bg-gray-50 rounded-lg">
+            <select
+              value={selectedUserId}
+              onChange={(e) => setSelectedUserId(e.target.value)}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900"
+            >
+              <option value="">Select a user to add...</option>
+              {availableUsers.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name} ({u.email}) — {u.role.replace("_", " ")}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleAddMember}
+              disabled={!selectedUserId}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50"
+            >
+              Add
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          {project.members.map((m) => (
+            <div key={m.id} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full text-sm">
+              <span className="text-gray-700">{m.name || m.email}</span>
+              {m.role && (
+                <span className="text-xs text-gray-400">({m.role.replace("_", " ")})</span>
+              )}
+              {canManageMembers && (
+                <button
+                  onClick={() => handleRemoveMember(m.id)}
+                  className="text-red-400 hover:text-red-600 ml-1"
+                  title="Remove member"
+                >
+                  &times;
+                </button>
+              )}
+            </div>
+          ))}
+          {project.members.length === 0 && (
+            <p className="text-sm text-gray-400">No members added yet</p>
+          )}
+        </div>
+      </div>
 
       {/* Tasks Section */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -317,8 +435,8 @@ export default function ProjectDetailPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assign To (Member ID)</label>
-                {project.members && project.members.length > 0 ? (
+                <label className="block text-sm font-medium text-gray-700 mb-1">Assign To</label>
+                {project.members.length > 0 ? (
                   <select
                     value={taskForm.assigneeId}
                     onChange={(e) => setTaskForm({ ...taskForm, assigneeId: e.target.value })}
@@ -332,12 +450,7 @@ export default function ProjectDetailPage() {
                     ))}
                   </select>
                 ) : (
-                  <input
-                    value={taskForm.assigneeId}
-                    onChange={(e) => setTaskForm({ ...taskForm, assigneeId: e.target.value })}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg outline-none text-gray-900"
-                    placeholder="User ID (optional)"
-                  />
+                  <p className="text-sm text-gray-400 py-2">Add members to assign tasks</p>
                 )}
               </div>
             </div>
